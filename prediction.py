@@ -102,7 +102,7 @@ def find_most_similar_face(test_vector):
     confidence = similarities[0][best_match_idx] * 100
     return best_match_label, round(float(confidence), 2)
 
-@app.route('/auth/register', methods=['POST'])
+@app.route('/ai/register', methods=['POST'])
 def register():
     data = request.get_json(silent=True)
 
@@ -147,7 +147,7 @@ def register():
 
 
 # ✅ API `/auth/login` - เข้าสู่ระบบ
-@app.route('/auth/login', methods=['POST'])
+@app.route('/ai/login', methods=['POST'])
 def login():
     data = request.json
     username = data.get("username")
@@ -237,4 +237,4 @@ def predict():
 
 # ✅ รัน Flask API
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5002, debug=True)
+    app.run(host="0.0.0.0", port=5003, debug=True)
