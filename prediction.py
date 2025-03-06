@@ -150,7 +150,6 @@ def register():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ✅ API เข้าสู่ระบบ
 @app.route('/ai/login', methods=['POST'])
 def login():
     data = request.json
@@ -169,8 +168,8 @@ def login():
         conn.close()
 
         if user and bcrypt.check_password_hash(user["password"], password):
-            access_token = create_access_token(identity=str(user["Users_ID"]))
-
+            # สร้าง JWT Token โดยเพิ่ม user_id ลงใน payload
+            access_token = create_access_token(identity={"username": user["username"], "user_id": user["Users_ID"], "role": user["Role_ID"]})
             return jsonify({"message": "เข้าสู่ระบบสำเร็จ!", "token": access_token}), 200
         else:
             return jsonify({"error": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
@@ -179,7 +178,7 @@ def login():
 
 # ✅ API ทำนายใบหน้า
 @app.route('/ai/predict', methods=['POST'])
-@jwt_required()
+@jwt_required()  # ตรวจสอบว่าเป็นผู้ใช้ที่เข้าสู่ระบบแล้ว
 def predict():
     if 'image' not in request.files:
         return jsonify({"error": "No image file provided"}), 400
@@ -190,14 +189,51 @@ def predict():
     file.save(file_path)
 
     test_face_vector = get_feature_vector(file_path)
-    os.remove(file_path)
-
     if test_face_vector is None:
+        os.remove(file_path)
         return jsonify({"error": "Failed to process image"}), 500
 
     best_match_name, confidence = find_most_similar_face(test_face_vector)
+    os.remove(file_path)
 
-    return jsonify({"predicted_match": best_match_name, "confidence_score": confidence}), 200 if best_match_name else 500
+    if best_match_name:
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT ThaiCelebrities_ID FROM thaicelebrities WHERE ThaiCelebrities_name = %s", (best_match_name,))
+            result = cursor.fetchone()
+
+            if result:
+                celebrity_id = result[0]
+                similarity_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                # ดึง User_ID จาก JWT Token
+                current_user = get_jwt_identity()  # ดึงข้อมูลจาก JWT token
+                print(current_user)  # พิมพ์ค่า user_id
+
+                if "user_id" not in current_user:
+                    return jsonify({"error": "user_id not found in token"}), 400  # ถ้าไม่มี user_id ใน token
+
+                user_id = current_user["user_id"]  # ดึง user_id จาก token
+
+                # บันทึกข้อมูลในตาราง similarity พร้อม User_ID
+                cursor.execute(
+                    "INSERT INTO similarity (similarity_Date, similarityDetail_Percent, ThaiCelebrities_ID, user_id) VALUES (%s, %s, %s, %s)",
+                    (similarity_date, confidence, celebrity_id, user_id)  # เพิ่ม user_id
+                )
+                conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"❌ ไม่สามารถบันทึกข้อมูลลง Database: {e}")
+
+        return jsonify({
+            "predicted_match": best_match_name,
+            "confidence_score": confidence
+        }), 200
+    else:
+        return jsonify({"error": "No matching face found"}), 500
 
 # ✅ รัน Flask API
 if __name__ == '__main__':
