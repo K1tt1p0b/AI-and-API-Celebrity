@@ -169,11 +169,8 @@ def login():
         conn.close()
 
         if user and bcrypt.check_password_hash(user["password"], password):
-            access_token = create_access_token(identity={
-                "username": user["username"],
-                "user_id": user["Users_ID"],
-                "role": user["Role_ID"]
-            })
+            access_token = create_access_token(identity=str(user["Users_ID"]))
+
             return jsonify({"message": "เข้าสู่ระบบสำเร็จ!", "token": access_token}), 200
         else:
             return jsonify({"error": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
