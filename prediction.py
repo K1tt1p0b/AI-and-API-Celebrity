@@ -181,6 +181,10 @@ def login():
 @app.route('/ai/predict', methods=['POST'])
 @jwt_required()
 def predict():
+
+    print("🔍 Debug: Request Headers →", request.headers)
+    print("🔍 Debug: Request Files →", request.files)
+
     if 'image' not in request.files:
         return jsonify({"error": "No image file provided"}), 400
 
