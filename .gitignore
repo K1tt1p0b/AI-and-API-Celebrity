@@ -1,5 +1,11 @@
 # Ignore the folder "Data_Image_celeb"
 Data_Image_celeb/
+Data_Image_celeb/DataTrain
+Data_Image_celeb/DataTest
+ModelEFF/label_databaseEFF.npy
+ModelEFF/feature_databaseEFF.npy
+ModelEFF/best_model_efficientnetB3.keras
+
 
 # Ignore specific files
 feature_database.npy

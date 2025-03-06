@@ -13,6 +13,9 @@ from tensorflow.keras.optimizers import AdamW
 from tensorflow.keras.utils import get_custom_objects
 from datetime import datetime
 
+# ✅ ปิดการใช้ GPU เพื่อใช้ CPU เท่านั้น
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
 # ✅ ตั้งค่าการเชื่อมต่อ MySQL
 db_config = {
     "host": "localhost",
