@@ -6,6 +6,7 @@ import tensorflow as tf
 import numpy as np
 import cv2
 import os
+import json
 from werkzeug.utils import secure_filename
 from sklearn.metrics.pairwise import cosine_similarity
 from tensorflow.keras.preprocessing.image import img_to_array
@@ -168,7 +169,11 @@ def login():
         conn.close()
 
         if user and bcrypt.check_password_hash(user["password"], password):
-            access_token = create_access_token(identity={"username": user["username"], "user_id": user["Users_ID"], "role": user["Role_ID"]})
+            access_token = create_access_token(identity={
+                "username": user["username"],
+                "user_id": user["Users_ID"],
+                "role": user["Role_ID"]
+            })
             return jsonify({"message": "เข้าสู่ระบบสำเร็จ!", "token": access_token}), 200
         else:
             return jsonify({"error": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
@@ -199,4 +204,4 @@ def predict():
 
 # ✅ รัน Flask API
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5003, debug=False)
+    app.run(host="0.0.0.0", port=5003, debug=False, threaded=True)
