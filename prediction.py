@@ -41,17 +41,29 @@ class FixedDropout(tf.keras.layers.Dropout):
 
 get_custom_objects().update({"FixedDropout": FixedDropout})
 
-# ✅ โหลดโมเดล
-MODEL_PATH = "best_model_efficientnetB3.keras"
+# ✅ โหลดโมเดล ResNet50 และใช้เป็น Feature Extractor
+MODEL_PATH = "resnet50_final_model_v2_edit_1.keras"
 try:
     model = tf.keras.models.load_model(
         MODEL_PATH, 
         custom_objects={"swish": tf.keras.activations.swish, "FixedDropout": FixedDropout, "AdamW": AdamW}
     )
-    dummy_input = np.zeros((1, 224, 224, 3))
-    _ = model.predict(dummy_input, verbose=0)
-    feature_extractor = tf.keras.Model(inputs=model.inputs[0], outputs=model.get_layer("global_average_pooling2d").output)
     print("✅ โหลดโมเดลสำเร็จ!")
+
+    # ✅ ใช้ ResNet50 เป็น Feature Extractor
+    resnet_base = model.get_layer("resnet50")
+    resnet_base.trainable = False  # ปิดการเรียนรู้ใหม่
+
+    feature_extractor = tf.keras.Sequential([
+        resnet_base,
+        tf.keras.layers.GlobalAveragePooling2D()
+    ])
+    print("✅ ใช้ GlobalAveragePooling2D เป็น Feature Extractor")
+
+    # ✅ ป้องกันปัญหา BatchNormalization
+    dummy_input = np.zeros((1, 224, 224, 3))
+    _ = feature_extractor.predict(dummy_input, verbose=0)
+
 except Exception as e:
     print(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
     model = None
@@ -73,15 +85,18 @@ except Exception as e:
 def connect_db():
     return mysql.connector.connect(**db_config)
 
-# ✅ ฟังก์ชันเตรียมภาพ
+# ✅ ฟังก์ชันเตรียมภาพ (แก้ไขให้ค่าถูกต้อง)
 def preprocess_image(image_path, target_size=(224, 224)):
     try:
         img = cv2.imdecode(np.fromfile(str(image_path), dtype=np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             return None
-        img_resized = cv2.resize(img, (1024, 1024))
-        img_resized = cv2.resize(img_resized, target_size)
-        img_resized = img_to_array(img_resized) / 255.0
+        img_resized = cv2.resize(img, target_size)
+        img_resized = img_to_array(img_resized)
+
+        # ✅ ใช้ preprocess_input ของ ResNet50
+        img_resized = tf.keras.applications.resnet50.preprocess_input(img_resized)
+
         return np.expand_dims(img_resized, axis=0)
     except Exception as e:
         print(f"❌ ไม่สามารถโหลดหรือปรับขนาดภาพ {image_path}: {e}")
@@ -90,7 +105,9 @@ def preprocess_image(image_path, target_size=(224, 224)):
 # ✅ ฟังก์ชันดึง Feature Vector
 def get_feature_vector(image_path):
     img = preprocess_image(image_path)
-    return feature_extractor.predict(img, verbose=0) if img is not None else None
+    if img is not None and feature_extractor is not None:
+        return feature_extractor.predict(img, verbose=0)[0]
+    return None
 
 # ✅ ฟังก์ชันค้นหาใบหน้าที่คล้ายที่สุด
 def find_most_similar_face(test_vector):
@@ -102,12 +119,10 @@ def find_most_similar_face(test_vector):
     confidence = similarities[0][best_match_idx] * 100
     return best_match_label, round(float(confidence), 2)
 
+# ✅ API ลงทะเบียน
 @app.route('/ai/register', methods=['POST'])
 def register():
     data = request.get_json(silent=True)
-
-    print("📩 Received Data:", data)  # ✅ Debug JSON ที่ได้รับ
-    
     if not data or "username" not in data or "password" not in data:
         return jsonify({"status": "error", "message": "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"}), 400
 
@@ -118,35 +133,20 @@ def register():
     try:
         conn = connect_db()
         cursor = conn.cursor()
-
         cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
         if cursor.fetchone():
             return jsonify({"status": "error", "message": "ชื่อผู้ใช้นี้ถูกใช้ไปแล้ว"}), 400
 
-        # กำหนด Role_ID = 1 (User) ในการสมัคร
         cursor.execute("INSERT INTO users (username, password, Role_ID) VALUES (%s, %s, 1)", (username, hashed_password))
         conn.commit()
-
-        # ดึงข้อมูล Role_ID ของผู้ใช้ใหม่
-        cursor.execute("SELECT Role_ID FROM users WHERE username = %s", (username,))
-        role_id = cursor.fetchone()[0]  # ดึง Role_ID จากฐานข้อมูล
-
-        # สร้าง JWT Token ด้วย Role_ID ที่ถูกต้อง
-        access_token = create_access_token(identity={"username": username, "role": role_id})
-
         cursor.close()
         conn.close()
 
-        return jsonify({
-            "status": "success",
-            "message": "สมัครสมาชิกสำเร็จ!",
-            "token": access_token
-        }), 201
+        return jsonify({"status": "success", "message": "สมัครสมาชิกสำเร็จ!"}), 201
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
-# ✅ API `/auth/login` - เข้าสู่ระบบ
+# ✅ API เข้าสู่ระบบ
 @app.route('/ai/login', methods=['POST'])
 def login():
     data = request.json
@@ -165,7 +165,6 @@ def login():
         conn.close()
 
         if user and bcrypt.check_password_hash(user["password"], password):
-            # สร้าง JWT Token โดยเพิ่ม user_id ลงใน payload
             access_token = create_access_token(identity={"username": user["username"], "user_id": user["Users_ID"], "role": user["Role_ID"]})
             return jsonify({"message": "เข้าสู่ระบบสำเร็จ!", "token": access_token}), 200
         else:
@@ -173,11 +172,9 @@ def login():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# ✅ API `/ai/predict` - ทำนายใบหน้าและบันทึกลงฐานข้อมูล
-
+# ✅ API ทำนายใบหน้า
 @app.route('/ai/predict', methods=['POST'])
-@jwt_required()  # ตรวจสอบว่าเป็นผู้ใช้ที่เข้าสู่ระบบแล้ว
+@jwt_required()
 def predict():
     if 'image' not in request.files:
         return jsonify({"error": "No image file provided"}), 400
@@ -188,53 +185,15 @@ def predict():
     file.save(file_path)
 
     test_face_vector = get_feature_vector(file_path)
+    os.remove(file_path)
+
     if test_face_vector is None:
-        os.remove(file_path)
         return jsonify({"error": "Failed to process image"}), 500
 
     best_match_name, confidence = find_most_similar_face(test_face_vector)
-    os.remove(file_path)
 
-    if best_match_name:
-        try:
-            conn = connect_db()
-            cursor = conn.cursor()
-
-            cursor.execute("SELECT ThaiCelebrities_ID FROM thaicelebrities WHERE ThaiCelebrities_name = %s", (best_match_name,))
-            result = cursor.fetchone()
-
-            if result:
-                celebrity_id = result[0]
-                similarity_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-                # ดึง User_ID จาก JWT Token
-                current_user = get_jwt_identity()  # ดึงข้อมูลจาก JWT token
-                print(current_user)  # พิมพ์ค่า user_id
-
-                if "user_id" not in current_user:
-                    return jsonify({"error": "user_id not found in token"}), 400  # ถ้าไม่มี user_id ใน token
-
-                user_id = current_user["user_id"]  # ดึง user_id จาก token
-
-                # บันทึกข้อมูลในตาราง similarity พร้อม User_ID
-                cursor.execute(
-                    "INSERT INTO similarity (similarity_Date, similarityDetail_Percent, ThaiCelebrities_ID, user_id) VALUES (%s, %s, %s, %s)",
-                    (similarity_date, confidence, celebrity_id, user_id)  # เพิ่ม user_id
-                )
-                conn.commit()
-            cursor.close()
-            conn.close()
-        except Exception as e:
-            print(f"❌ ไม่สามารถบันทึกข้อมูลลง Database: {e}")
-
-        return jsonify({
-            "predicted_match": best_match_name,
-            "confidence_score": confidence
-        }), 200
-    else:
-        return jsonify({"error": "No matching face found"}), 500
-
+    return jsonify({"predicted_match": best_match_name, "confidence_score": confidence}), 200 if best_match_name else 500
 
 # ✅ รัน Flask API
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5003, debug=True)
+    app.run(host="0.0.0.0", port=5003, debug=False)
