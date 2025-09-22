@@ -5,9 +5,12 @@ Data_Image_celeb/DataTest
 ModelEFF/label_databaseEFF.npy
 ModelEFF/feature_databaseEFF.npy
 ModelEFF/best_model_efficientnetB3.keras
+data_skintone/
+output_results/
 
 
 # Ignore specific files
 feature_database.npy
 label_database.npy
 resnet50_final_model_v2_edit_1.keras
+mobilenet_v2_skintonemodel.pth
