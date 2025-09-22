@@ -41,6 +41,155 @@ INSERT INTO `age` VALUES (1,'2024-10-24','11.820123672485352'),(2,'2024-10-24','
 UNLOCK TABLES;
 
 --
+-- Table structure for table `brand`
+--
+
+DROP TABLE IF EXISTS `brand`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `brand` (
+  `brandID` int NOT NULL AUTO_INCREMENT,
+  `brandName` varchar(255) NOT NULL,
+  `createdAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`brandID`),
+  UNIQUE KEY `brandName` (`brandName`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `brand`
+--
+
+LOCK TABLES `brand` WRITE;
+/*!40000 ALTER TABLE `brand` DISABLE KEYS */;
+INSERT INTO `brand` VALUES (1,'Dior','2025-07-31 09:42:02','2025-07-31 09:42:02'),(2,'MAC Cosmetics','2025-07-31 09:42:02','2025-07-31 09:42:02'),(3,'Maybelline','2025-07-31 09:42:02','2025-07-31 09:42:02'),(4,'L\'Oréal Paris','2025-07-31 09:42:02','2025-07-31 09:42:02'),(5,'Fenty Beauty','2025-07-31 09:42:02','2025-07-31 09:42:02'),(6,'Sephora Collection','2025-07-31 09:42:02','2025-07-31 09:42:02'),(7,'NARS Cosmetics','2025-07-31 09:42:02','2025-07-31 09:42:02'),(8,'Kylie Cosmetics','2025-07-31 09:42:02','2025-07-31 09:42:02'),(9,'Anastasia Beverly Hills','2025-07-31 09:42:02','2025-07-31 09:42:02'),(10,'Benefit Cosmetics','2025-07-31 09:42:02','2025-07-31 09:42:02');
+/*!40000 ALTER TABLE `brand` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `cosmetics`
+--
+
+DROP TABLE IF EXISTS `cosmetics`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `cosmetics` (
+  `CosmeticID` int NOT NULL AUTO_INCREMENT,
+  `Name` varchar(255) NOT NULL,
+  `ShadeCode` varchar(50) DEFAULT NULL,
+  `ShadeName` varchar(255) DEFAULT NULL,
+  `Type` varchar(255) DEFAULT NULL,
+  `Price` decimal(10,2) NOT NULL,
+  `ImageURL` varchar(512) DEFAULT NULL,
+  `ProductLink` varchar(512) DEFAULT NULL,
+  `BrandID` int NOT NULL,
+  `suitableSkinTone` varchar(50) DEFAULT NULL,
+  `suitableBudgetRange` varchar(50) DEFAULT NULL,
+  `suitableLookType` varchar(255) DEFAULT NULL,
+  `createdAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`CosmeticID`),
+  KEY `BrandID` (`BrandID`),
+  CONSTRAINT `cosmetics_ibfk_1` FOREIGN KEY (`BrandID`) REFERENCES `brand` (`brandID`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `cosmetics`
+--
+
+LOCK TABLES `cosmetics` WRITE;
+/*!40000 ALTER TABLE `cosmetics` DISABLE KEYS */;
+INSERT INTO `cosmetics` VALUES (1,'Dior Addict Lip Glow',NULL,NULL,'Lipstick',1500.00,'url_to_dior_lipglow_image.jpg','url_to_dior_lipglow_product.com',1,'Neutral','1500 - 3000','ธรรมชาติ','2025-07-31 13:10:02','2025-07-31 13:10:02');
+/*!40000 ALTER TABLE `cosmetics` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `feedback`
+--
+
+DROP TABLE IF EXISTS `feedback`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `feedback` (
+  `FeedbackID` int NOT NULL AUTO_INCREMENT,
+  `CommentText` text,
+  `Rating` int NOT NULL,
+  `Date` date DEFAULT (curdate()),
+  `UserID` int DEFAULT NULL,
+  PRIMARY KEY (`FeedbackID`),
+  KEY `fk_feedback_user` (`UserID`),
+  CONSTRAINT `fk_feedback_user` FOREIGN KEY (`UserID`) REFERENCES `users` (`Users_ID`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `feedback`
+--
+
+LOCK TABLES `feedback` WRITE;
+/*!40000 ALTER TABLE `feedback` DISABLE KEYS */;
+INSERT INTO `feedback` VALUES (1,'แอปดีมากเลยค่ะ ชอบสุดๆ!',5,'2025-08-14',17),(2,'TEst',3,'2025-08-14',17);
+/*!40000 ALTER TABLE `feedback` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `makeuplook`
+--
+
+DROP TABLE IF EXISTS `makeuplook`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `makeuplook` (
+  `LookID` int NOT NULL AUTO_INCREMENT,
+  `lookName` varchar(255) NOT NULL,
+  `lookCategory` varchar(255) DEFAULT NULL,
+  `description` text,
+  PRIMARY KEY (`LookID`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `makeuplook`
+--
+
+LOCK TABLES `makeuplook` WRITE;
+/*!40000 ALTER TABLE `makeuplook` DISABLE KEYS */;
+INSERT INTO `makeuplook` VALUES (1,'ธรรมชาติ','Everyday Looks','ธรรมชาติใสๆ'),(2,'สายเกาหลี','Cultural Styles','เน้นผิวฉ่ำวาว อายไลเนอร์บางเบา สีปากสดใส'),(3,'สายฝอ','Cultural Styles','เน้นโครงหน้าชัด คอนทัวร์หนัก อายแชโดว์คมเข้ม'),(4,'สโมคกี้อายส์','Party Looks','เน้นดวงตาโดดเด่น ด้วยอายแชโดว์สีเข้ม'),(5,'Everyday Glam','Everyday Looks','ลุคที่ดูแต่งหน้า แต่ยังคงความเบาและสดใส เหมาะกับทุกวัน'),(6,'งานกลางคืน','Party Looks','ลุคสำหรับออกงานกลางคืน หรูหราและโดดเด่น'),(7,'วินเทจ','Thematic Looks','สไตล์การแต่งหน้าย้อนยุค เช่น ยุค 60s, 70s'),(8,'เทรนดี้','Seasonal Looks','ลุคที่กำลังอินเทรนด์ในปัจจุบัน'),(9,'งานรับปริญญา','Special Occasion','ลุคที่สุภาพ แต่ยังคงความสวยงาม เหมาะกับวันสำคัญ'),(10,'แนวพังก์','Alternative Styles','ลุคที่เน้นความขบถและมีเอกลักษณ์เฉพาะตัว');
+/*!40000 ALTER TABLE `makeuplook` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `recommendedcolorpalettes`
+--
+
+DROP TABLE IF EXISTS `recommendedcolorpalettes`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `recommendedcolorpalettes` (
+  `PaletteID` int NOT NULL AUTO_INCREMENT,
+  `PaletteName` varchar(255) NOT NULL,
+  `SuitableSkinTone` varchar(50) NOT NULL,
+  `ImageURL` varchar(512) NOT NULL,
+  `Description` text,
+  `createdAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`PaletteID`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `recommendedcolorpalettes`
+--
+
+LOCK TABLES `recommendedcolorpalettes` WRITE;
+/*!40000 ALTER TABLE `recommendedcolorpalettes` DISABLE KEYS */;
+INSERT INTO `recommendedcolorpalettes` VALUES (1,'Warm Tone General Color Palette','Warm Tone','warm.jpg','ตารางสีสำหรับผิวโทนอุ่น','2025-07-31 14:17:12','2025-07-31 15:33:56'),(2,'Cool Tone General Color Palette','Cool Tone','cool.jpg','ตารางสีสำหรับผิวโทนเย็น','2025-07-31 14:17:12','2025-07-31 15:33:56'),(3,'Neutral Tone General Color Palette','Neutral Tone','neutral.jpg','ตารางสีสำหรับผิวโทนกลาง','2025-07-31 14:17:12','2025-07-31 15:33:56');
+/*!40000 ALTER TABLE `recommendedcolorpalettes` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `role`
 --
 
@@ -82,7 +231,7 @@ CREATE TABLE `similarity` (
   KEY `fk_User_ID` (`User_ID`),
   CONSTRAINT `fk_User_ID` FOREIGN KEY (`User_ID`) REFERENCES `users` (`Users_ID`),
   CONSTRAINT `similarity_ibfk_1` FOREIGN KEY (`ThaiCelebrities_ID`) REFERENCES `thaicelebrities` (`ThaiCelebrities_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=102 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -91,8 +240,35 @@ CREATE TABLE `similarity` (
 
 LOCK TABLES `similarity` WRITE;
 /*!40000 ALTER TABLE `similarity` DISABLE KEYS */;
-INSERT INTO `similarity` VALUES (67,'2025-02-25',35.26,81,17),(68,'2025-02-25',35.26,81,17),(69,'2025-02-25',29.50,36,17);
+INSERT INTO `similarity` VALUES (67,'2025-02-25',35.26,81,17),(68,'2025-02-25',35.26,81,17),(69,'2025-02-25',29.50,36,17),(70,'2025-02-25',35.26,81,17),(71,'2025-02-25',33.71,67,17),(72,'2025-03-05',29.88,26,17),(73,'2025-03-05',30.59,26,17),(74,'2025-03-05',30.34,26,17),(75,'2025-03-05',30.36,26,17),(76,'2025-07-30',57.98,47,17),(77,'2025-07-31',46.59,59,17),(78,'2025-07-31',46.59,59,17),(79,'2025-07-31',46.14,59,17),(80,'2025-07-31',45.28,59,17),(81,'2025-07-31',44.86,59,17),(82,'2025-08-12',46.68,59,17),(83,'2025-08-12',46.68,59,17),(84,'2025-08-12',46.49,59,17),(85,'2025-08-12',45.02,59,17),(86,'2025-08-12',44.70,59,17),(87,'2025-08-12',46.73,59,17),(88,'2025-08-14',56.92,48,17),(89,'2025-08-15',55.70,91,18),(90,'2025-08-15',63.87,17,18),(91,'2025-08-15',68.60,17,18),(92,'2025-08-15',68.60,17,17),(93,'2025-08-15',68.60,17,17),(94,'2025-08-15',68.60,17,17),(95,'2025-08-15',68.60,17,17),(96,'2025-08-15',68.60,17,17),(97,'2025-08-15',64.82,10,17),(98,'2025-08-18',57.15,61,18),(99,'2025-08-18',63.87,17,18),(100,'2025-08-18',55.39,38,19),(101,'2025-08-18',60.81,63,19);
 /*!40000 ALTER TABLE `similarity` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `skintoneanalysis`
+--
+
+DROP TABLE IF EXISTS `skintoneanalysis`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `skintoneanalysis` (
+  `SkinToneAnalysisID` int NOT NULL AUTO_INCREMENT,
+  `SkinTone` varchar(100) DEFAULT NULL,
+  `Users_ID` int DEFAULT NULL,
+  PRIMARY KEY (`SkinToneAnalysisID`),
+  KEY `Users_ID` (`Users_ID`),
+  CONSTRAINT `skintoneanalysis_ibfk_1` FOREIGN KEY (`Users_ID`) REFERENCES `users` (`Users_ID`)
+) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `skintoneanalysis`
+--
+
+LOCK TABLES `skintoneanalysis` WRITE;
+/*!40000 ALTER TABLE `skintoneanalysis` DISABLE KEYS */;
+INSERT INTO `skintoneanalysis` VALUES (1,'Cool Tone',17),(2,'Cool Tone',17),(3,'Neutral Tone',17),(4,'Neutral Tone',17),(5,'Neutral Tone',17),(6,'Neutral Tone',17),(7,'Neutral Tone',17),(8,'Neutral Tone',17),(9,'Warm Tone',17),(10,'Warm Tone',17),(11,'Neutral Tone',17),(12,'Warm Tone',17),(13,'Neutral Tone',17),(14,'Neutral Tone',17),(15,'Neutral Tone',17),(16,'Warm Tone',17),(17,'Warm Tone',17),(18,'Warm Tone',17),(19,'Warm Tone',17),(20,'Warm Tone',17),(21,'Neutral Tone',17),(22,'Neutral Tone',17),(23,'Warm Tone',17),(24,'Neutral Tone',18),(25,'Neutral Tone',18),(26,'Neutral Tone',18),(27,'Neutral Tone',18),(28,'Neutral Tone',18),(29,'Neutral Tone',18),(30,'Cool Tone',18),(31,'Cool Tone',18),(32,'Cool Tone',18),(33,'Neutral Tone',17),(34,'Neutral Tone',17),(35,'Neutral Tone',17),(36,'Neutral Tone',18),(37,'Neutral Tone',18),(38,'Neutral Tone',18),(39,'Cool Tone',18),(40,'Cool Tone',18),(41,'Neutral Tone',19),(42,'Neutral Tone',19),(43,'Cool Tone',19);
+/*!40000 ALTER TABLE `skintoneanalysis` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -134,7 +310,7 @@ CREATE TABLE `users` (
   PRIMARY KEY (`Users_ID`),
   KEY `Role_ID` (`Role_ID`),
   CONSTRAINT `users_ibfk_1` FOREIGN KEY (`Role_ID`) REFERENCES `role` (`Role_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -143,7 +319,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'admin','$2b$12$6dbWIzTWcSD55qVzmNhPHOTTgO1j3xAPtctTdUqaMulw9glBbSGwa',2),(2,'pichai','$2b$12$6dbWIzTWcSD55qVzmNhPHOTTgO1j3xAPtctTdUqaMulw9glBbSGwa',2),(17,'Test','$2b$12$WChZnogLJd8ZJArPkVBriu93FDp5tW1s.oNWaEVlJYcJ2L5KEM/Fe',1);
+INSERT INTO `users` VALUES (1,'admin','$2b$12$6dbWIzTWcSD55qVzmNhPHOTTgO1j3xAPtctTdUqaMulw9glBbSGwa',2),(2,'pichai','$2b$12$6dbWIzTWcSD55qVzmNhPHOTTgO1j3xAPtctTdUqaMulw9glBbSGwa',2),(17,'Test','$2b$12$WChZnogLJd8ZJArPkVBriu93FDp5tW1s.oNWaEVlJYcJ2L5KEM/Fe',1),(18,'Nack','$2b$12$gAl8n6B8AXeYzcMva2lFJu54DbIrapNgWYi1anXcdgo1zA5.Y7/re',1),(19,'duangjai','$2b$12$ao3JXzw7UwK4Z/trDUsV7ezLqHZa7Hwp8sZxyD40KOK8syYFx6/ie',1);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -160,4 +336,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-02-25 20:58:02
+-- Dump completed on 2025-09-22 21:41:05
