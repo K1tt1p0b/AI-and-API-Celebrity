@@ -7,8 +7,23 @@ ModelEFF/feature_databaseEFF.npy
 ModelEFF/best_model_efficientnetB3.keras
 data_skintone/
 output_results/
-
-
+requirements.txt
+shopee_profile/
+script/
+big_brands_shopee.csv
+brand_shade_map.csv
+brand_shops.json
+cosmetics_by_skin_tone.csv
+cosmetics_by_skin_tone.xlsx
+cosmetics_products.csv
+cosmetics_scraped_20250924_163435.csv
+fetch_from_urls_with_variations.py
+input_urls.csv
+match_shades_to_ai.py
+products_shades.csv
+sample_cosmetics_urls.csv
+top50_autofilled.csv
+top50_by_shop.csv
 # Ignore specific files
 feature_database.npy
 label_database.npy
