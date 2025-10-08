@@ -24,6 +24,9 @@ products_shades.csv
 sample_cosmetics_urls.csv
 top50_autofilled.csv
 top50_by_shop.csv
+script_shadeHEX/
+test.py
+ผิวfair.jpg
 # Ignore specific files
 feature_database.npy
 label_database.npy
