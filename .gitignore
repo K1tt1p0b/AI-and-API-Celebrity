@@ -27,6 +27,7 @@ top50_by_shop.csv
 script_shadeHEX/
 test.py
 ผิวfair.jpg
+static/products/
 # Ignore specific files
 feature_database.npy
 label_database.npy

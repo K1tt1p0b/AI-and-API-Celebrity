@@ -43,9 +43,29 @@ bcrypt = Bcrypt(app)
 app.config["JWT_SECRET_KEY"] = "ggygyuf6ydfyh8u5yusfuy"
 jwt = JWTManager(app)
 
+# upload temp dir (for incoming files)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# -------- NEW: static product images dir + route ----------
+# เก็บไฟล์รูปสินค้าจริงไว้ที่ static/products และเสิร์ฟผ่าน /products/<filename>
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PRODUCTS_DIR = os.path.join(BASE_DIR, "static", "products")
+os.makedirs(PRODUCTS_DIR, exist_ok=True)
+
+@app.route("/products/<path:filename>")
+def serve_product_image(filename):
+    # ตัวอย่าง URL: http://<host>:5003/products/1717234_abc.jpg
+    # ใน DB เก็บ ImageURL เป็น 'products/1717234_abc.jpg'
+    resp = send_from_directory(PRODUCTS_DIR, filename)
+    try:
+        # optional cache: 1 วัน
+        resp.cache_control.max_age = 24 * 60 * 60
+    except Exception:
+        pass
+    return resp
+# ----------------------------------------------------------
 
 # -----------------------------
 # Keras custom layers
@@ -182,7 +202,7 @@ def map_raw_to_brightness(raw_cls: str) -> str:
     return RAW2BRIGHT.get((raw_cls or "").lower(), "Medium")
 
 def brightness_label_th(en: str):
-    th = {"Fair":"โทนสว่าง", "Medium":"โทนกลาง", "Brown":"โทนกลาง", "Deep":"โทนเข้ม"}
+    th = {"Fair":"โทนสว่าง", "Medium":"โทนกลาง", "Brown":"โทนน้ำตาล", "Deep":"โทนเข้ม"}
     return th.get(en, "ไม่ระบุโทน")
 
 def predict_skin_tone_from_image(image_path):
