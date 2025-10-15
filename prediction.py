@@ -1,4 +1,3 @@
-# app.py
 import os
 import cv2
 import json
@@ -48,24 +47,31 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# -------- NEW: static product images dir + route ----------
-# เก็บไฟล์รูปสินค้าจริงไว้ที่ static/products และเสิร์ฟผ่าน /products/<filename>
+# -------- static images dir + routes ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# products
 PRODUCTS_DIR = os.path.join(BASE_DIR, "static", "products")
 os.makedirs(PRODUCTS_DIR, exist_ok=True)
 
 @app.route("/products/<path:filename>")
 def serve_product_image(filename):
-    # ตัวอย่าง URL: http://<host>:5003/products/1717234_abc.jpg
-    # ใน DB เก็บ ImageURL เป็น 'products/1717234_abc.jpg'
     resp = send_from_directory(PRODUCTS_DIR, filename)
     try:
-        # optional cache: 1 วัน
-        resp.cache_control.max_age = 24 * 60 * 60
+        resp.cache_control.max_age = 24 * 60 * 60  # 1 day
     except Exception:
         pass
     return resp
-# ----------------------------------------------------------
+
+# palettes (NOTE: serve from static/ directly to match your folder layout)
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+@app.route('/palettes/<path:filename>')
+def serve_palette_image(filename):
+    # e.g. /palettes/brown.jpg -> static/brown.jpg
+    return send_from_directory(STATIC_DIR, filename)
+# ----------------------------------------------------
 
 # -----------------------------
 # Keras custom layers
@@ -362,13 +368,11 @@ def canon_look(val: str):
             return k
     return None
 
-# CSV-safe LIKE matcher for tone lists like "Light, Medium, Brown"
 def tone_csv_like_clause(column_alias="c.`suitableSkinTone`", tone_value="fair"):
-    # LOCATE(',fair,', CONCAT(',', lower(col), ',')) > 0
     return f"LOCATE(%s, CONCAT(',', LOWER(COALESCE({column_alias},'')), ',')) > 0", f",{tone_value.lower()},"
 
 # -----------------------------
-# (NEW) Static palette mapping for /ai/cosmetics/recommendations
+# Static palette mapping
 # -----------------------------
 PALETTE_BY_TONE = {
     "Fair":   "fair.jpg",
@@ -509,7 +513,6 @@ def predict_skin_tone():
 
         brightness_th = brightness_label_th(final_brightness)
 
-        # save to DB (SkinTone + ITA metrics if columns exist)
         uid = int(get_jwt_identity())
         conn = connect_db()
         if conn:
@@ -539,7 +542,6 @@ def predict_skin_tone():
                 """, (final_brightness, None, float(ai_conf or 0), uid))
             conn.commit(); cur.close(); conn.close()
 
-        # NOTE: fields align with Android PrizeActivity (old schema too)
         return jsonify({
             "brightness_class": final_brightness,
             "brightness_label_th": brightness_th,
@@ -748,12 +750,8 @@ def get_all_cosmetics():
         if conn: conn.close()
 
 # -----------------------------
-# Static palettes (serve from ./static)
+# Redirect legacy recommend path
 # -----------------------------
-@app.route('/palettes/<filename>')
-def serve_palette_image(filename):
-    return send_from_directory('static', filename)
-
 @app.get("/ai/products/recommend")
 @jwt_required()
 def legacy_products_recommend():
@@ -764,12 +762,11 @@ def legacy_products_recommend():
     return redirect(target, code=307)
 
 # -----------------------------
-# COSMETICS recommendations (ΔE00-aware; no retailer_offers, no best*)
+# COSMETICS recommendations (Lab-only ΔE00 + metadata; show palettes)
 # -----------------------------
 @app.route('/ai/cosmetics/recommendations', methods=['GET'])
 @jwt_required()
 def get_recommended_cosmetics():
-    skin_tone_q = (request.args.get('skinTone') or '').strip()
     budget_str  = (request.args.get('budget') or '').strip()
     look_raw    = (request.args.get('lookType') or request.args.get('look') or '').strip()
     style_id    = request.args.get('styleId', type=int)
@@ -805,7 +802,7 @@ def get_recommended_cosmetics():
             return jsonify({"error":"Database connection failed"}), 500
         cursor = conn.cursor(dictionary=True)
 
-        # A) user skin
+        # A) User skin
         uid = int(get_jwt_identity())
         cursor.execute("""
             SELECT SkinTone, Confidence, L_star, b_star
@@ -817,20 +814,19 @@ def get_recommended_cosmetics():
         u_skin = cursor.fetchone() or {}
 
         user_brightness = (u_skin.get('SkinTone') or '').strip()
-        if not user_brightness and skin_tone_q:
-            user_brightness = skin_tone_q
-
         user_anchor = None
         user_L = u_skin.get('L_star'); user_b = u_skin.get('b_star')
         if user_L is not None and user_b is not None:
             try:
                 user_anchor = (float(user_L), 0.0, float(user_b))
-            except:
+            except Exception:
                 user_anchor = None
         if user_anchor is None and user_brightness in BUCKET_ANCHORS:
             user_anchor = BUCKET_ANCHORS[user_brightness]
+        if user_anchor is None:
+            return jsonify({"error":"ไม่พบค่าผิวผู้ใช้ที่ใช้คำนวณ (L*, b*)"}), 400
 
-        # B) look keywords
+        # B) Look keywords
         canon = canon_look(look_raw) if look_raw else None
         if canon:
             look_keywords = [k.lower() for k in LOOK_MAP[canon]["keywords"]]
@@ -846,15 +842,8 @@ def get_recommended_cosmetics():
                 toks = [t] + [x for x in t.replace('/', ' ').replace(',', ' ').split() if len(x) >= 2]
                 look_keywords = list(dict.fromkeys(toks))
 
-        # C) WHERE
+        # C) WHERE (Lab-only)
         where, params = [], []
-
-        # tone filter: CSV-safe LIKE (",fair," in ",light, fair, medium,")
-        if user_brightness:
-            tone_clause, tone_param = tone_csv_like_clause("c.`suitableSkinTone`", user_brightness)
-            where.append(f"({tone_clause} OR LOWER(COALESCE(c.`suitableSkinTone`,'universal')) IN (%s,%s))")
-            params.extend([tone_param, 'universal', 'all'])
-
         if look_keywords:
             where.append("(" + " OR ".join(["LOWER(COALESCE(c.`suitableLookType`,'')) LIKE %s"]*len(look_keywords)) + ")")
             params.extend([f"%{kw}%" for kw in look_keywords])
@@ -868,13 +857,15 @@ def get_recommended_cosmetics():
         if maxp is not None:
             where.append("(c.Price <= %s)"); params.append(maxp)
 
-        # D) SELECT (no best* fields)
+        where.append("(c.Lab_L IS NOT NULL AND c.Lab_a IS NOT NULL AND c.Lab_b IS NOT NULL)")
+
+        # D) SELECT
         sql = f"""
         SELECT
           c.CosmeticID, b.brandName, c.Name, c.Type,
           COALESCE(c.ShadeCode, c.ShadeName) AS Shade,
           c.Price, c.ImageURL, c.ProductLink,
-          c.suitableSkinTone, c.suitableLookType,
+          c.suitableLookType,
           c.Lab_L, c.Lab_a, c.Lab_b,
           c.Description
         FROM cosmetics c
@@ -885,16 +876,7 @@ def get_recommended_cosmetics():
         cursor.execute(sql, tuple(params))
         rows = cursor.fetchall()
 
-        # E) rank
-        skin_ai_conf = ((u_skin.get('Confidence') or 50) / 100.0)
-
-        def source_trust_of(_row):
-            # ไม่มีแหล่งร้านค้าแล้ว → ความเชื่อถือฐานกลาง ๆ
-            return 0.7
-
-        def conf_level(x: int) -> str:
-            return "มั่นใจสูง" if x >= 75 else ("มั่นใจปานกลาง" if x >= 50 else "ควรทดลองเฉดใกล้เคียง")
-
+        # E) Rank: ΔE00 (80%) + metadata (20%)
         def product_family(t: str) -> str:
             if not t: return "other"
             v = (t or "").strip().lower()
@@ -910,75 +892,57 @@ def get_recommended_cosmetics():
             if any(k in v for k in brows): return "brow"
             return "other"
 
-        def color_bonus_for_family(family, deltaE):
+        def match_score_from_deltaE(family, deltaE):
             if deltaE is None:
-                return 0.0, None
+                return 0.0, "ไม่มีข้อมูลสีของสินค้า (Lab) เพียงพอ"
             if family == "complexion":
-                if deltaE <= 2:  return 0.10, f"เฉดผิวแมตช์มาก (ΔE00={deltaE:.1f})"
-                if deltaE <= 4:  return 0.07, f"เฉดใกล้ผิว (ΔE00={deltaE:.1f})"
-                if deltaE <= 6:  return 0.04, f"เฉดพอใช้ (ΔE00={deltaE:.1f})"
-                return 0.00, None
+                if deltaE <= 2:  return 1.00, f"เฉดผิวแมตช์มาก (ΔE00={deltaE:.1f})"
+                if deltaE <= 4:  return 0.85, f"เฉดใกล้ผิว (ΔE00={deltaE:.1f})"
+                if deltaE <= 6:  return 0.65, f"เฉดพอใช้ (ΔE00={deltaE:.1f})"
+                return 0.30, f"เฉดอาจเพี้ยน (ΔE00={deltaE:.1f})"
             if family in ("lips","blush"):
-                if 15 <= deltaE <= 25: return 0.10, f"คอนทราสต์สวย (ΔE00={deltaE:.1f})"
-                if 25 <  deltaE <= 40: return 0.07, f"คอนทราสต์เด่น (ΔE00={deltaE:.1f})"
-                return 0.00, None
+                if 15 <= deltaE <= 25: return 1.00, f"คอนทราสต์สวย (ΔE00={deltaE:.1f})"
+                if 25 <  deltaE <= 40: return 0.80, f"คอนทราสต์เด่น (ΔE00={deltaE:.1f})"
+                return 0.40, f"คอนทราสต์อาจไม่พอดี (ΔE00={deltaE:.1f})"
             if family == "eyes":
-                if 20 <= deltaE <= 45: return 0.08, f"เฉดตาดูเด่น (ΔE00={deltaE:.1f})"
-                if 45 <  deltaE <= 60: return 0.05, f"ลุคจัดชัด (ΔE00={deltaE:.1f})"
-                return 0.00, None
+                if 20 <= deltaE <= 45: return 0.95, f"เฉดตาดูเด่น (ΔE00={deltaE:.1f})"
+                if 45 <  deltaE <= 60: return 0.75, f"ลุคจัดชัด (ΔE00={deltaE:.1f})"
+                return 0.40, f"คอนทราสต์อาจไม่พอดี (ΔE00={deltaE:.1f})"
             if family == "brow":
-                if deltaE <= 5:   return 0.08, f"คิ้วกลืนผิว (ΔE00={deltaE:.1f})"
-                if deltaE <= 12:  return 0.06, f"เฉดคิ้วใกล้เคียง (ΔE00={deltaE:.1f})"
-                if deltaE <= 20:  return 0.03, f"เฉดคิ้วพอใช้ (ΔE00={deltaE:.1f})"
-                return 0.00, None
-            return 0.00, None
+                if deltaE <= 5:   return 0.95, f"คิ้วกลืนผิว (ΔE00={deltaE:.1f})"
+                if deltaE <= 12:  return 0.80, f"เฉดคิ้วใกล้เคียง (ΔE00={deltaE:.1f})"
+                if deltaE <= 20:  return 0.60, f"เฉดคิ้วพอใช้ (ΔE00={deltaE:.1f})"
+                return 0.30, f"เฉดคิ้วต่างจากผิว (ΔE00={deltaE:.1f})"
+            if deltaE <= 10: return 0.8, f"สีค่อนข้างใกล้ (ΔE00={deltaE:.1f})"
+            return 0.5, f"สีต่างปานกลาง (ΔE00={deltaE:.1f})"
 
         augmented = []
         for r in rows:
             fam = product_family(r.get('Type') or r.get('Name') or "")
-            reasons, badges = [], []
-            rule = 0.0
-
-            # tone match (CSV-safe + universal/all)
-            tone_db = (r.get('suitableSkinTone') or '')
-            if user_brightness:
-                s_val = f",{user_brightness.lower()},"
-                in_row = ("," + tone_db.lower().replace(" ", "") + ",")
-                if (s_val.replace(" ", "") in in_row) or (tone_db.lower() in {"universal","all"}):
-                    rule += 0.55
-                    reasons.append("ตรงกับโทนความสว่างผิวของคุณ")
-
-            if r.get('ImageURL'): rule += 0.05
-            if r.get('Description'): rule += 0.05
+            reasons = []
 
             deltaE = None
-            if (user_anchor is not None and
-                r.get('Lab_L') is not None and r.get('Lab_a') is not None and r.get('Lab_b') is not None):
-                try:
-                    lab_prod = (float(r['Lab_L']), float(r['Lab_a']), float(r['Lab_b']))
-                    deltaE = delta_e_ciede2000(user_anchor, lab_prod)
-                except Exception:
-                    deltaE = None
+            try:
+                lab_prod = (float(r['Lab_L']), float(r['Lab_a']), float(r['Lab_b']))
+                deltaE = delta_e_ciede2000(user_anchor, lab_prod)
+            except Exception:
+                pass
 
-            color_bonus, color_reason = color_bonus_for_family(fam, deltaE)
-            if color_bonus > 0:
-                rule += color_bonus
-                if color_reason:
-                    reasons.append(color_reason)
+            match_score, reason = match_score_from_deltaE(fam, deltaE)
+            reasons.append(reason)
 
-            rule_conf = min(1.0, rule)
-            s_trust = source_trust_of(r)
+            meta = 0.0
+            if r.get('ImageURL'): meta += 0.5
+            if r.get('Description'): meta += 0.5
+            meta = min(1.0, meta)
 
-            hybrid = int(round(100 * (0.55 * rule_conf + 0.25 * skin_ai_conf + 0.20 * s_trust)))
-            hybrid = max(0, min(100, hybrid))
-            level = conf_level(hybrid)
+            hybrid = int(round(100 * (0.80*match_score + 0.20*meta)))
+            level = "มั่นใจสูง" if hybrid >= 75 else ("มั่นใจปานกลาง" if hybrid >= 50 else "ควรทดลองเฉดใกล้เคียง")
 
-            r['suitableSkinTone'] = canon_suitable_tone(r.get('suitableSkinTone'))
             item = {
                 **r,
                 "hybrid_confidence": hybrid,
                 "confidence_level": level,
-                "badges": list(dict.fromkeys(badges)),
                 "reasons": reasons[:3]
             }
             if deltaE is not None:
@@ -991,24 +955,16 @@ def get_recommended_cosmetics():
             x.get('Name') or ""
         ))
 
-        # --- Build palette payload (ตามโทนที่สรุปได้) ---
+        # F) Palettes: show by user's brightness (absolute path)
         rec_palettes = []
-        pal_name = None
         if user_brightness and user_brightness in PALETTE_BY_TONE:
-            pal_name = PALETTE_BY_TONE[user_brightness]
-
-        # ถ้ายังไม่มี ลองดูจาก query ?skinTone=
-        if not pal_name and skin_tone_q:
-            st = (skin_tone_q or "").strip().title()  # fair -> Fair
-            if st in PALETTE_BY_TONE:
-                pal_name = PALETTE_BY_TONE[st]
-
-        # แนบเฉพาะถ้าไฟล์อยู่จริงใน ./static
-        if pal_name and os.path.exists(os.path.join("static", pal_name)):
-            rec_palettes.append({
-                "Tone": user_brightness or skin_tone_q,
-                "ImageURL": pal_name
-            })
+            pal_name = PALETTE_BY_TONE[user_brightness]  # e.g. "fair.jpg"
+            pal_path = os.path.join(STATIC_DIR, pal_name)
+            if os.path.exists(pal_path):
+                rec_palettes.append({
+                    "Tone": user_brightness,
+                    "ImageURL": f"/palettes/{pal_name}"
+                })
 
         return jsonify({
             "recommendedCosmetics": augmented,
@@ -1050,7 +1006,7 @@ def get_cosmetic_detail(cosmetic_id):
             return jsonify({"error":"Cosmetic not found"}), 404
         item['suitableSkinTone'] = canon_suitable_tone(item.get('suitableSkinTone'))
 
-        best_offer = None  # ไม่มี retailer_offers แล้ว
+        best_offer = None
         return jsonify({"item": item, "bestOffer": best_offer}), 200
     except Exception as e:
         print("detail error:", e)
