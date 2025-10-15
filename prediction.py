@@ -10,7 +10,13 @@ import tensorflow as tf
 from flask import Flask, request, jsonify, send_from_directory, redirect
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    jwt_required,
+    get_jwt_identity,
+    get_jwt,
+)
 from werkzeug.utils import secure_filename
 
 from sklearn.metrics.pairwise import cosine_similarity
@@ -23,6 +29,8 @@ from PIL import Image
 import torch
 import torchvision.transforms as transforms
 from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
+
+from datetime import timedelta, datetime, timezone
 
 # -----------------------------
 # Basic setup
@@ -40,6 +48,14 @@ app = Flask(__name__)
 CORS(app)
 bcrypt = Bcrypt(app)
 app.config["JWT_SECRET_KEY"] = "ggygyuf6ydfyh8u5yusfuy"
+
+# ✅ Make access tokens non-expiring (if your Flask-JWT-Extended version supports it)
+try:
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False
+except Exception:
+    # Fallback to very long expiry (~100 years)
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=36500)
+
 jwt = JWTManager(app)
 
 # upload temp dir (for incoming files)
@@ -72,6 +88,30 @@ def serve_palette_image(filename):
     # e.g. /palettes/brown.jpg -> static/brown.jpg
     return send_from_directory(STATIC_DIR, filename)
 # ----------------------------------------------------
+
+# -----------------------------
+# In-memory token blocklist (no DB)
+# -----------------------------
+REVOKED_JTIS = set()  # ❗ Lost on process restart and not shared across workers
+
+def revoke_token_in_memory(jti: str) -> bool:
+    try:
+        if not jti:
+            return False
+        REVOKED_JTIS.add(jti)
+        return True
+    except Exception as e:
+        print(f"❌ revoke_token_in_memory error: {e}")
+        return False
+
+def is_token_revoked_in_memory(jti: str) -> bool:
+    # True = revoked/blocked
+    return jti in REVOKED_JTIS
+
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
+    jti = jwt_payload.get("jti")
+    return is_token_revoked_in_memory(jti)
 
 # -----------------------------
 # Keras custom layers
@@ -426,6 +466,31 @@ def login():
         return jsonify({"error": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ✅ Logout endpoint (no DB, in-memory blocklist)
+@app.route('/ai/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    try:
+        jti = get_jwt().get("jti")
+        if not jti:
+            return jsonify({"status": "error", "message": "ไม่พบ JTI ของ token"}), 400
+        if not revoke_token_in_memory(jti):
+            return jsonify({"status": "error", "message": "เพิกถอน token ไม่สำเร็จ"}), 500
+        return jsonify({"status": "success", "message": "ออกจากระบบสำเร็จ (token ถูกเพิกถอนแล้ว)"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# (Optional) Inspect token expiry for debugging
+@app.route("/ai/token_info", methods=["GET"])
+@jwt_required()
+def token_info():
+    claims = get_jwt()
+    exp_ts = claims.get("exp")
+    if not exp_ts:
+        return {"exp": None, "note": "token นี้ไม่มี exp (ไม่หมดอายุ)"}, 200
+    dt = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+    return {"exp_epoch_utc": exp_ts, "exp_utc_iso": dt.isoformat()}, 200
 
 # -----------------------------
 # FACE PREDICT
